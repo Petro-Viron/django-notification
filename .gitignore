@@ -1,0 +1,11 @@
+*.pyc
+pip-log.txt
+test_server/
+logs/*.*
+*.swp
+*.swo
+*.pid
+*.log
+.fuse*
+local_settings.py
+layer/data/

@@ -1,4 +1,5 @@
 import datetime
+import pynliner
 
 try:
     import cPickle as pickle
@@ -8,7 +9,8 @@ except ImportError:
 from django.db import models
 from django.db.models.query import QuerySet
 from django.conf import settings
-from django.core.mail import send_mail
+from django.core.mail import EmailMessage
+from django.core import mail
 from django.core.urlresolvers import reverse
 from django.template import Context
 from django.template.loader import render_to_string
@@ -25,8 +27,14 @@ from django.contrib.contenttypes import generic
 from django.utils.translation import ugettext_lazy as _
 from django.utils.translation import ugettext, get_language, activate
 
+from postmark import PMMail
+import twilio
 
 QUEUE_ALL = getattr(settings, "NOTIFICATION_QUEUE_ALL", False)
+TWILIO_API_VERSION = getattr(settings, "TWILIO_API_VERSION", False)
+TWILIO_ACCOUNT_SID = getattr(settings, "TWILIO_ACCOUNT_SID", False)
+TWILIO_ACCOUNT_TOKEN = getattr(settings, "TWILIO_ACCOUNT_TOKEN", False)
+TWILIO_CALLER_ID = getattr(settings, "TWILIO_CALLER_ID", False)
 
 class LanguageStoreNotAvailable(Exception):
     pass
@@ -51,11 +59,15 @@ class NoticeType(models.Model):
 # if this gets updated, the create() method below needs to be as well...
 NOTICE_MEDIA = (
     ("1", _("Email")),
+    ("2", _("Display")),
+    ("3", _("SMS")),
 )
 
 # how spam-sensitive is the medium
 NOTICE_MEDIA_DEFAULTS = {
-    "1": 2 # email
+    "1": 2, # email
+    "2": 3,
+    "3": 3,
 }
 
 class NoticeSetting(models.Model):
@@ -244,7 +256,7 @@ def get_formatted_messages(formats, label, context):
             'notification/%s' % format), context_instance=context)
     return format_templates
 
-def send_now(users, label, extra_context=None, on_site=True, sender=None):
+def send_now(users, label, extra_context=None, on_site=True, sender=None, attachments=[]):
     """
     Creates a new notice.
 
@@ -279,6 +291,7 @@ def send_now(users, label, extra_context=None, on_site=True, sender=None):
         'full.txt',
         'notice.html',
         'full.html',
+        'sms.txt',
     ) # TODO make formats configurable
 
     for user in users:
@@ -315,12 +328,24 @@ def send_now(users, label, extra_context=None, on_site=True, sender=None):
         body = render_to_string('notification/email_body.txt', {
             'message': messages['full.txt'],
         }, context)
-
+        body = pynliner.fromString(body)
+        on_site = should_send(user, notice_type, "2") #On-site display
         notice = Notice.objects.create(recipient=user, message=messages['notice.html'],
             notice_type=notice_type, on_site=on_site, sender=sender)
         if should_send(user, notice_type, "1") and user.email and user.is_active: # Email
             recipients.append(user.email)
-        send_mail(subject, body, settings.DEFAULT_FROM_EMAIL, recipients)
+            recipients = ','.join(recipients)
+            msg = PMMail(to=recipients, subject=subject, html_body=body, attachments=attachments)
+            msg.send()
+        if should_send(user, notice_type, "3") and user.get_profile().sms and user.is_active:
+            account = twilio.Account(TWILIO_ACCOUNT_SID, TWILIO_ACCOUNT_TOKEN)
+            d = {'Body': messages['sms.txt'], 'To': user.get_profile().sms, 'From': TWILIO_CALLER_ID}
+            try:
+                account.request('/%s/Accounts/%s/SMS/Messages' % (TWILIO_API_VERSION, TWILIO_ACCOUNT_SID), 'POST', d)
+            except:
+                pass #TODO - process response errors.
+
+
 
     # reset environment to original language
     activate(current_language)
