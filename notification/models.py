@@ -75,7 +75,7 @@ NOTICE_MEDIA = (
 )
 
 def notice_medium_as_text(medium):
-    return [ key for key, val in NOTICE_MEDIA if key == medium ][0]
+    return dict(NOTICE_MEDIA)[medium]
 
 # how spam-sensitive is the medium
 NOTICE_MEDIA_DEFAULTS = {
@@ -114,7 +114,7 @@ def should_send(user, notice_type, medium, obj_instance=None):
         has_custom_settings =  custom_permission_check('custom_notification_settings', obj_instance, user)
         if has_custom_settings:
             medium_text = notice_medium_as_text(medium)
-            perm_string = "%s-%s"%(medium_text,notice_type.label)
+            perm_string = u"%s-%s"%(medium_text,notice_type.label)
             return custom_permission_check(perm_string, obj_instance, user)
     return get_notification_setting(user, notice_type, medium).send
 
@@ -354,8 +354,10 @@ def send_now(users, label, extra_context=None, on_site=True, sender=None, attach
             notice_type=notice_type, on_site=on_site, sender=sender)
         if should_send(user, notice_type, "1", obj_instance) and user.email and user.is_active: # Email
             recipients.append(user.email)
-            recipients = ','.join(recipients)
-            msg = PMMail(to=recipients, subject=subject, html_body=body, attachments=attachments)
+            msg = EmailMessage(subject, body, settings.DEFAULT_FROM_EMAIL, recipients)
+            msg.content_subtype = "html"
+            for attachment in attachments: 
+                msg.attach(attachment)
             msg.send()
         if should_send(user, notice_type, "3", obj_instance) and user.get_profile().sms and user.is_active:
             account = twilio.Account(TWILIO_ACCOUNT_SID, TWILIO_ACCOUNT_TOKEN)
