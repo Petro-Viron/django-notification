@@ -9,7 +9,7 @@ except ImportError:
 from django.db import models
 from django.db.models.query import QuerySet
 from django.conf import settings
-from django.core.mail import EmailMessage
+from django.core.mail import EmailMultiAlternatives
 from django.core import mail
 from django.core.urlresolvers import reverse
 from django.template import Context
@@ -24,7 +24,7 @@ from django.contrib.auth.models import AnonymousUser
 from django.contrib.contenttypes.models import ContentType
 from django.contrib.contenttypes import generic
 
-from django.utils.translation import ugettext_lazy as _
+from django.utils.translation import ugettext as _
 from django.utils.translation import ugettext, get_language, activate
 
 from postmark import PMMail
@@ -354,8 +354,10 @@ def send_now(users, label, extra_context=None, on_site=True, sender=None, attach
             notice_type=notice_type, on_site=on_site, sender=sender)
         if should_send(user, notice_type, "1", obj_instance) and user.email and user.is_active: # Email
             recipients.append(user.email)
-            msg = EmailMessage(subject, body, settings.DEFAULT_FROM_EMAIL, recipients)
-            msg.content_subtype = "html"
+            # send empty "plain text" data
+            msg = EmailMultiAlternatives(subject, "", settings.DEFAULT_FROM_EMAIL, recipients)
+            # attach html data as alternative
+            msg.attach_alternative(body, "text/html")
             for attachment in attachments: 
                 msg.attach(attachment)
             msg.send()
