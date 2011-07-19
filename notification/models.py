@@ -9,7 +9,7 @@ except ImportError:
 from django.db import models
 from django.db.models.query import QuerySet
 from django.conf import settings
-from django.core.mail import EmailMessage
+from django.core.mail import EmailMultiAlternatives
 from django.core import mail
 from django.core.urlresolvers import reverse
 from django.template import Context
@@ -24,7 +24,7 @@ from django.contrib.auth.models import AnonymousUser
 from django.contrib.contenttypes.models import ContentType
 from django.contrib.contenttypes import generic
 
-from django.utils.translation import ugettext_lazy as _
+from django.utils.translation import ugettext as _
 from django.utils.translation import ugettext, get_language, activate
 
 from postmark import PMMail
@@ -35,6 +35,17 @@ TWILIO_API_VERSION = getattr(settings, "TWILIO_API_VERSION", False)
 TWILIO_ACCOUNT_SID = getattr(settings, "TWILIO_ACCOUNT_SID", False)
 TWILIO_ACCOUNT_TOKEN = getattr(settings, "TWILIO_ACCOUNT_TOKEN", False)
 TWILIO_CALLER_ID = getattr(settings, "TWILIO_CALLER_ID", False)
+
+if 'guardian' in settings.INSTALLED_APPS:
+    enable_object_notifications = True
+    from guardian.models import UserObjectPermission
+    
+    def custom_permission_check(perm, obj, user):
+        return UserObjectPermission.objects.filter(user=user, permission__codename=perm, 
+                object_pk = obj.pk, content_type=ContentType.objects.get_for_model(obj)).exists()
+
+else:
+    enable_object_notifications = False
 
 class LanguageStoreNotAvailable(Exception):
     pass
@@ -62,6 +73,9 @@ NOTICE_MEDIA = (
     ("2", _("Display")),
     ("3", _("SMS")),
 )
+
+def notice_medium_as_text(medium):
+    return dict(NOTICE_MEDIA)[medium]
 
 # how spam-sensitive is the medium
 NOTICE_MEDIA_DEFAULTS = {
@@ -95,7 +109,13 @@ def get_notification_setting(user, notice_type, medium):
         setting.save()
         return setting
 
-def should_send(user, notice_type, medium):
+def should_send(user, notice_type, medium, obj_instance=None):
+    if enable_object_notifications and obj_instance:
+        has_custom_settings =  custom_permission_check('custom_notification_settings', obj_instance, user)
+        if has_custom_settings:
+            medium_text = notice_medium_as_text(medium)
+            perm_string = u"%s-%s"%(medium_text,notice_type.label)
+            return custom_permission_check(perm_string, obj_instance, user)
     return get_notification_setting(user, notice_type, medium).send
 
 
@@ -256,7 +276,7 @@ def get_formatted_messages(formats, label, context):
             'notification/%s' % format), context_instance=context)
     return format_templates
 
-def send_now(users, label, extra_context=None, on_site=True, sender=None, attachments=[]):
+def send_now(users, label, extra_context=None, on_site=True, sender=None, attachments=[], obj_instance=None):
     """
     Creates a new notice.
 
@@ -329,15 +349,19 @@ def send_now(users, label, extra_context=None, on_site=True, sender=None, attach
             'message': messages['full.txt'],
         }, context)
         body = pynliner.fromString(body)
-        on_site = should_send(user, notice_type, "2") #On-site display
+        on_site = should_send(user, notice_type, "2", obj_instance) #On-site display
         notice = Notice.objects.create(recipient=user, message=messages['notice.html'],
             notice_type=notice_type, on_site=on_site, sender=sender)
-        if should_send(user, notice_type, "1") and user.email and user.is_active: # Email
+        if should_send(user, notice_type, "1", obj_instance) and user.email and user.is_active: # Email
             recipients.append(user.email)
-            recipients = ','.join(recipients)
-            msg = PMMail(to=recipients, subject=subject, html_body=body, attachments=attachments)
+            # send empty "plain text" data
+            msg = EmailMultiAlternatives(subject, "", settings.DEFAULT_FROM_EMAIL, recipients)
+            # attach html data as alternative
+            msg.attach_alternative(body, "text/html")
+            for attachment in attachments: 
+                msg.attach(attachment)
             msg.send()
-        if should_send(user, notice_type, "3") and user.get_profile().sms and user.is_active:
+        if should_send(user, notice_type, "3", obj_instance) and user.get_profile().sms and user.is_active:
             account = twilio.Account(TWILIO_ACCOUNT_SID, TWILIO_ACCOUNT_TOKEN)
             d = {'Body': messages['sms.txt'], 'To': user.get_profile().sms, 'From': TWILIO_CALLER_ID}
             try:
