@@ -109,6 +109,15 @@ def get_notification_setting(user, notice_type, medium):
         setting.save()
         return setting
 
+def get_all_notification_settings(user):
+    return NoticeSetting.objects.filter(user=user)
+
+def create_notification_setting(user, notice_type, medium):
+    default = (NOTICE_MEDIA_DEFAULTS[medium] <= notice_type.default)
+    setting = NoticeSetting(user=user, notice_type=notice_type, medium=medium, send=default)
+    setting.save()
+    return setting
+
 def should_send(user, notice_type, medium, obj_instance=None):
     if enable_object_notifications and obj_instance:
         has_custom_settings =  custom_permission_check('custom_notification_settings', obj_instance, user)
