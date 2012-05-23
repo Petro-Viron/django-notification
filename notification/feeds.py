@@ -1,4 +1,5 @@
 from datetime import datetime
+from django.utils import timezone
 
 from django.core.urlresolvers import reverse
 from django.conf import settings
@@ -63,7 +64,7 @@ class NoticeUserFeed(BaseNoticeFeed):
         # must be a feed_updated field as per the Atom specifications, however
         # there is no real data to go by, and an arbitrary date can be static.
         if qs.count() == 0:
-            return datetime(year=2008, month=7, day=1)
+            return datetime(year=2008, month=7, day=1).replace(tzinfo=timezone.utc)
         return qs.latest('added').added
 
     def feed_links(self, user):
