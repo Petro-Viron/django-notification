@@ -29,6 +29,9 @@ from django.utils.translation import ugettext, get_language, activate
 
 from postmark import PMMail
 import twilio
+import logging
+
+notifications_logger = logging.getLogger("pivot.notifications")
 
 QUEUE_ALL = getattr(settings, "NOTIFICATION_QUEUE_ALL", False)
 TWILIO_API_VERSION = getattr(settings, "TWILIO_API_VERSION", False)
@@ -369,15 +372,19 @@ def send_now(users, label, extra_context=None, on_site=True, sender=None, attach
             msg.attach_alternative(body, "text/html")
             for attachment in attachments: 
                 msg.attach(attachment)
-            msg.send()
+            try:
+                msg.send()
+                notifications_logger.info("SUCCESS:EMAIL:%s: data=(notice_type=%s, subject=%s)"%(user, notice_type, subject))
+            except:
+                notifications_logger.exception("ERROR:EMAIL:%s: data=(notice_type=%s, subject=%s)"%(user, notice_type, subject))
         if should_send(user, notice_type, "3", obj_instance) and user.get_profile().sms and user.is_active:
             account = twilio.Account(TWILIO_ACCOUNT_SID, TWILIO_ACCOUNT_TOKEN)
             d = {'Body': messages['sms.txt'], 'To': user.get_profile().sms, 'From': TWILIO_CALLER_ID}
             try:
                 account.request('/%s/Accounts/%s/SMS/Messages' % (TWILIO_API_VERSION, TWILIO_ACCOUNT_SID), 'POST', d)
+                notifications_logger.info("SUCCESS:SMS:%s: data=(notice_type=%s, msg=%s)"%(user, notice_type, messages['sms.txt']))
             except:
-                pass #TODO - process response errors.
-
+                notifications_logger.exception("ERROR:SMS:%s: data=(notice_type=%s, msg=%s)"%(user, notice_type, messages['sms.txt']))
 
 
     # reset environment to original language
