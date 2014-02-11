@@ -41,10 +41,10 @@ TWILIO_CALLER_ID = getattr(settings, "TWILIO_CALLER_ID", False)
 
 if 'guardian' in settings.INSTALLED_APPS:
     enable_object_notifications = True
-    from guardian.models import UserObjectPermission
-    
+
     def custom_permission_check(perm, obj, user):
-        return UserObjectPermission.objects.filter(user=user, permission__codename=perm, 
+        from guardian.models import UserObjectPermission
+        return UserObjectPermission.objects.filter(user=user, permission__codename=perm,
                 object_pk = obj.pk, content_type=ContentType.objects.get_for_model(obj)).exists()
 
 else:
