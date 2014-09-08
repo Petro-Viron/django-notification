@@ -28,7 +28,7 @@ from django.utils.translation import ugettext as _
 from django.utils.translation import ugettext, get_language, activate
 
 from postmark import PMMail
-import twilio
+from twilio.rest import TwilioRestClient
 import logging
 
 notifications_logger = logging.getLogger("pivot.notifications")
@@ -378,10 +378,11 @@ def send_now(users, label, extra_context=None, on_site=True, sender=None, attach
             except:
                 notifications_logger.exception("ERROR:EMAIL:%s: data=(notice_type=%s, subject=%s)"%(user, notice_type, subject))
         if should_send(user, notice_type, "3", obj_instance) and user.userprofile.sms and user.is_active:
-            account = twilio.Account(TWILIO_ACCOUNT_SID, TWILIO_ACCOUNT_TOKEN)
-            d = {'Body': messages['sms.txt'], 'To': user.userprofile.sms, 'From': TWILIO_CALLER_ID}
             try:
-                account.request('/%s/Accounts/%s/SMS/Messages' % (TWILIO_API_VERSION, TWILIO_ACCOUNT_SID), 'POST', d)
+                rc = TwilioRestClient(TWILIO_ACCOUNT_SID, TWILIO_ACCOUNT_TOKEN)
+                rc.sms.messages.create(to=user.userprofile.sms,
+                                       from_=TWILIO_CALLER_ID,
+                                       body=messages['sms.txt'])
                 notifications_logger.info("SUCCESS:SMS:%s: data=(notice_type=%s, msg=%s)"%(user, notice_type, messages['sms.txt']))
             except:
                 notifications_logger.exception("ERROR:SMS:%s: data=(notice_type=%s, msg=%s)"%(user, notice_type, messages['sms.txt']))
