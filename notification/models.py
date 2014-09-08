@@ -377,9 +377,9 @@ def send_now(users, label, extra_context=None, on_site=True, sender=None, attach
                 notifications_logger.info("SUCCESS:EMAIL:%s: data=(notice_type=%s, subject=%s)"%(user, notice_type, subject))
             except:
                 notifications_logger.exception("ERROR:EMAIL:%s: data=(notice_type=%s, subject=%s)"%(user, notice_type, subject))
-        if should_send(user, notice_type, "3", obj_instance) and user.get_profile().sms and user.is_active:
+        if should_send(user, notice_type, "3", obj_instance) and user.userprofile.sms and user.is_active:
             account = twilio.Account(TWILIO_ACCOUNT_SID, TWILIO_ACCOUNT_TOKEN)
-            d = {'Body': messages['sms.txt'], 'To': user.get_profile().sms, 'From': TWILIO_CALLER_ID}
+            d = {'Body': messages['sms.txt'], 'To': user.userprofile.sms, 'From': TWILIO_CALLER_ID}
             try:
                 account.request('/%s/Accounts/%s/SMS/Messages' % (TWILIO_API_VERSION, TWILIO_ACCOUNT_SID), 'POST', d)
                 notifications_logger.info("SUCCESS:SMS:%s: data=(notice_type=%s, msg=%s)"%(user, notice_type, messages['sms.txt']))
