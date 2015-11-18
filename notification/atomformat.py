@@ -30,6 +30,7 @@
 
 from xml.sax.saxutils import XMLGenerator
 from datetime import datetime
+from django.utils import timezone
 
 
 GENERATOR_TEXT = 'django-atompub'
@@ -232,7 +233,7 @@ class AtomFeed(object):
             updates.sort()
             return updates[-1]
         else:
-            return datetime.now() # @@@ really we should allow a feed to define its "start" for this case
+            return timezone.now() # @@@ really we should allow a feed to define its "start" for this case
     
     
     def write_text_construct(self, handler, element_name, data):

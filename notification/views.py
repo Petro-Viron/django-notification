@@ -3,7 +3,7 @@ from django.shortcuts import render_to_response, get_object_or_404
 from django.http import HttpResponseRedirect, Http404
 from django.template import RequestContext
 from django.contrib.auth.decorators import login_required
-from django.contrib.syndication.views import feed
+from django.contrib.syndication.views import Feed
 
 from notification.models import *
 from notification.decorators import basic_auth_required, simple_basic_auth_callback
@@ -16,7 +16,7 @@ def feed_for_user(request):
     An atom feed for all unarchived :model:`notification.Notice`s for a user.
     """
     url = "feed/%s" % request.user.username
-    return feed(request, url, {
+    return Feed(request, url, {
         "feed": NoticeUserFeed,
     })
 

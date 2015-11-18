@@ -1,4 +1,4 @@
-import datetime
+from django.utils import timezone
 import pynliner
 
 try:
@@ -28,7 +28,10 @@ from django.utils.translation import ugettext as _
 from django.utils.translation import ugettext, get_language, activate
 
 from postmark import PMMail
-import twilio
+from twilio.rest import TwilioRestClient
+import logging
+
+notifications_logger = logging.getLogger("pivot.notifications")
 
 QUEUE_ALL = getattr(settings, "NOTIFICATION_QUEUE_ALL", False)
 TWILIO_API_VERSION = getattr(settings, "TWILIO_API_VERSION", False)
@@ -38,10 +41,10 @@ TWILIO_CALLER_ID = getattr(settings, "TWILIO_CALLER_ID", False)
 
 if 'guardian' in settings.INSTALLED_APPS:
     enable_object_notifications = True
-    from guardian.models import UserObjectPermission
-    
+
     def custom_permission_check(perm, obj, user):
-        return UserObjectPermission.objects.filter(user=user, permission__codename=perm, 
+        from guardian.models import UserObjectPermission
+        return UserObjectPermission.objects.filter(user=user, permission__codename=perm,
                 object_pk = obj.pk, content_type=ContentType.objects.get_for_model(obj)).exists()
 
 else:
@@ -93,7 +96,7 @@ class NoticeSetting(models.Model):
     user = models.ForeignKey(User, verbose_name=_('user'))
     notice_type = models.ForeignKey(NoticeType, verbose_name=_('notice type'))
     medium = models.CharField(_('medium'), max_length=1, choices=NOTICE_MEDIA)
-    send = models.BooleanField(_('send'))
+    send = models.BooleanField(_('send'), default=False)
 
     class Meta:
         verbose_name = _("notice setting")
@@ -108,6 +111,15 @@ def get_notification_setting(user, notice_type, medium):
         setting = NoticeSetting(user=user, notice_type=notice_type, medium=medium, send=default)
         setting.save()
         return setting
+
+def get_all_notification_settings(user):
+    return NoticeSetting.objects.filter(user=user)
+
+def create_notification_setting(user, notice_type, medium):
+    default = (NOTICE_MEDIA_DEFAULTS[medium] <= notice_type.default)
+    setting = NoticeSetting(user=user, notice_type=notice_type, medium=medium, send=default)
+    setting.save()
+    return setting
 
 def should_send(user, notice_type, medium, obj_instance=None):
     if enable_object_notifications and obj_instance:
@@ -172,10 +184,10 @@ class Notice(models.Model):
     sender = models.ForeignKey(User, null=True, related_name='sent_notices', verbose_name=_('sender'))
     message = models.TextField(_('message'))
     notice_type = models.ForeignKey(NoticeType, verbose_name=_('notice type'))
-    added = models.DateTimeField(_('added'), default=datetime.datetime.now)
+    added = models.DateTimeField(_('added'), default=timezone.now)
     unseen = models.BooleanField(_('unseen'), default=True)
     archived = models.BooleanField(_('archived'), default=False)
-    on_site = models.BooleanField(_('on site'))
+    on_site = models.BooleanField(_('on site'), default=False)
 
     objects = NoticeManager()
 
@@ -360,15 +372,20 @@ def send_now(users, label, extra_context=None, on_site=True, sender=None, attach
             msg.attach_alternative(body, "text/html")
             for attachment in attachments: 
                 msg.attach(attachment)
-            msg.send()
-        if should_send(user, notice_type, "3", obj_instance) and user.get_profile().sms and user.is_active:
-            account = twilio.Account(TWILIO_ACCOUNT_SID, TWILIO_ACCOUNT_TOKEN)
-            d = {'Body': messages['sms.txt'], 'To': user.get_profile().sms, 'From': TWILIO_CALLER_ID}
             try:
-                account.request('/%s/Accounts/%s/SMS/Messages' % (TWILIO_API_VERSION, TWILIO_ACCOUNT_SID), 'POST', d)
+                msg.send()
+                notifications_logger.info("SUCCESS:EMAIL:%s: data=(notice_type=%s, subject=%s)"%(user, notice_type, subject))
             except:
-                pass #TODO - process response errors.
-
+                notifications_logger.exception("ERROR:EMAIL:%s: data=(notice_type=%s, subject=%s)"%(user, notice_type, subject))
+        if should_send(user, notice_type, "3", obj_instance) and user.userprofile.sms and user.is_active:
+            try:
+                rc = TwilioRestClient(TWILIO_ACCOUNT_SID, TWILIO_ACCOUNT_TOKEN)
+                rc.sms.messages.create(to=user.userprofile.sms,
+                                       from_=TWILIO_CALLER_ID,
+                                       body=messages['sms.txt'])
+                notifications_logger.info("SUCCESS:SMS:%s: data=(notice_type=%s, msg=%s)"%(user, notice_type, messages['sms.txt']))
+            except:
+                notifications_logger.exception("ERROR:SMS:%s: data=(notice_type=%s, msg=%s)"%(user, notice_type, messages['sms.txt']))
 
 
     # reset environment to original language
@@ -438,7 +455,7 @@ class ObservedItem(models.Model):
 
     notice_type = models.ForeignKey(NoticeType, verbose_name=_('notice type'))
 
-    added = models.DateTimeField(_('added'), default=datetime.datetime.now)
+    added = models.DateTimeField(_('added'), default=timezone.now)
 
     # the signal that will be listened to send the notice
     signal = models.TextField(verbose_name=_('signal'))
