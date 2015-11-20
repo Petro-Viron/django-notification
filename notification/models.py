@@ -163,14 +163,14 @@ class NoticeManager(models.Manager):
         mark them seen
         """
         return self.notices_for(recipient, unseen=True, **kwargs).count()
-    
+
     def received(self, recipient, **kwargs):
         """
         returns notices the given recipient has recieved.
         """
         kwargs["sent"] = False
         return self.notices_for(recipient, **kwargs)
-    
+
     def sent(self, sender, **kwargs):
         """
         returns notices the given sender has sent
@@ -298,7 +298,7 @@ def send_now(users, label, extra_context=None, on_site=True, sender=None, attach
         'spam': 'eggs',
         'foo': 'bar',
     )
-    
+
     You can pass in on_site=False to prevent the notice emitted from being
     displayed on the site.
     """
@@ -361,19 +361,21 @@ def send_now(users, label, extra_context=None, on_site=True, sender=None, attach
             'message': messages['full.txt'],
         }, context)
         body = pynliner.fromString(body)
-        on_site = should_send(user, notice_type, "2", obj_instance) #On-site display
-        notice = Notice.objects.create(recipient=user, message=messages['notice.html'],
-            notice_type=notice_type, on_site=on_site, sender=sender)
+
+        # on site notices aren't used anymore
+        # on_site = should_send(user, notice_type, "2", obj_instance) #On-site display
         if should_send(user, notice_type, "1", obj_instance) and user.email and user.is_active: # Email
+            notice = Notice.objects.create(recipient=user, message=body, notice_type=notice_type)
             recipients.append(user.email)
             # send empty "plain text" data
             msg = EmailMultiAlternatives(subject, "", settings.DEFAULT_FROM_EMAIL, recipients)
             # attach html data as alternative
             msg.attach_alternative(body, "text/html")
-            for attachment in attachments: 
+            for attachment in attachments:
                 msg.attach(attachment)
             try:
                 msg.send()
+                notice.archive()
                 notifications_logger.info("SUCCESS:EMAIL:%s: data=(notice_type=%s, subject=%s)"%(user, notice_type, subject))
             except:
                 notifications_logger.exception("ERROR:EMAIL:%s: data=(notice_type=%s, subject=%s)"%(user, notice_type, subject))
@@ -410,7 +412,7 @@ def send(*args, **kwargs):
             return queue(*args, **kwargs)
         else:
             return send_now(*args, **kwargs)
-        
+
 def queue(users, label, extra_context=None, on_site=True, sender=None):
     """
     Queue the notification in NoticeQueueBatch. This allows for large amounts
