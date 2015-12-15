@@ -288,7 +288,8 @@ def get_formatted_messages(formats, label, context):
             'notification/%s' % format), context_instance=context)
     return format_templates
 
-def send_now(users, label, extra_context=None, on_site=True, sender=None, attachments=[], obj_instance=None):
+def send_now(users, label, extra_context=None, on_site=True, sender=None, attachments=[],\
+        obj_instance=None, force_send=False):
     """
     Creates a new notice.
 
@@ -364,7 +365,7 @@ def send_now(users, label, extra_context=None, on_site=True, sender=None, attach
 
         # on site notices aren't used anymore
         # on_site = should_send(user, notice_type, "2", obj_instance) #On-site display
-        if should_send(user, notice_type, "1", obj_instance) and user.email and user.is_active: # Email
+        if (should_send(user, notice_type, "1", obj_instance) or force_send) and user.email and user.is_active: # Email
             notice = Notice.objects.create(recipient=user, message=body, notice_type=notice_type)
             recipients.append(user.email)
             # send empty "plain text" data
