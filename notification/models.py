@@ -27,7 +27,7 @@ from django.contrib.contenttypes import generic
 from django.utils.translation import ugettext as _
 from django.utils.translation import ugettext, get_language, activate
 
-from postmark import django_backend as postmark_backend
+from postmark import PMMail
 from twilio.rest import TwilioRestClient
 import logging
 
@@ -38,7 +38,6 @@ TWILIO_API_VERSION = getattr(settings, "TWILIO_API_VERSION", False)
 TWILIO_ACCOUNT_SID = getattr(settings, "TWILIO_ACCOUNT_SID", False)
 TWILIO_ACCOUNT_TOKEN = getattr(settings, "TWILIO_ACCOUNT_TOKEN", False)
 TWILIO_CALLER_ID = getattr(settings, "TWILIO_CALLER_ID", False)
-TWILIO_ALERT_NUMBER = getattr(settings, "TWILIO_ALERT_NUMBER", False)
 
 if 'guardian' in settings.INSTALLED_APPS:
     enable_object_notifications = True
@@ -50,20 +49,6 @@ if 'guardian' in settings.INSTALLED_APPS:
 
 else:
     enable_object_notifications = False
-
-django_postmark_backend = postmark_backend.EmailBackend()
-
-def send_postmark_message(msg):
-    pm_mail = django_postmark_backend._build_message(msg)
-    pm_mail.send()
-    if not pm_mail.message_id:
-        raise Exception("No PMMail message_id")
-
-def send_twilio_message(to, body):
-    rc = TwilioRestClient(TWILIO_ACCOUNT_SID, TWILIO_ACCOUNT_TOKEN)
-    rc.sms.messages.create(to=to,
-                           from_=TWILIO_CALLER_ID,
-                           body=body)
 
 class LanguageStoreNotAvailable(Exception):
     pass
@@ -390,20 +375,17 @@ def send_now(users, label, extra_context=None, on_site=True, sender=None, attach
             for attachment in attachments:
                 msg.attach(attachment)
             try:
-                send_postmark_message(msg)
+                msg.send()
                 notice.archive()
                 notifications_logger.info("SUCCESS:EMAIL:%s: data=(notice_type=%s, subject=%s)"%(user, notice_type, subject))
             except:
-                if TWILIO_ALERT_NUMBER:
-                    try:
-                        send_twilio_message(TWILIO_ALERT_NUMBER, "Email not sent: (%s, %s, %s)"%(user, notice_type, subject,))
-                    except:
-                        notifications_logger.exception("ERROR:SMS:Unable to send email error.")
-
                 notifications_logger.exception("ERROR:EMAIL:%s: data=(notice_type=%s, subject=%s)"%(user, notice_type, subject))
         if should_send(user, notice_type, "3", obj_instance) and user.userprofile.sms and user.is_active:
             try:
-                send_twilio_message(user.userprofile.sms, messages['sms.txt'])
+                rc = TwilioRestClient(TWILIO_ACCOUNT_SID, TWILIO_ACCOUNT_TOKEN)
+                rc.sms.messages.create(to=user.userprofile.sms,
+                                       from_=TWILIO_CALLER_ID,
+                                       body=messages['sms.txt'])
                 notifications_logger.info("SUCCESS:SMS:%s: data=(notice_type=%s, msg=%s)"%(user, notice_type, messages['sms.txt']))
             except:
                 notifications_logger.exception("ERROR:SMS:%s: data=(notice_type=%s, msg=%s)"%(user, notice_type, messages['sms.txt']))
