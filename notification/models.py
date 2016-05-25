@@ -1,6 +1,8 @@
 from django.utils import timezone
 import pynliner
 
+from .signals import email_sent, sms_sent
+
 try:
     import cPickle as pickle
 except ImportError:
@@ -362,11 +364,10 @@ def send_now(users, label, extra_context=None, on_site=True, sender=None, attach
             'message': messages['full.txt'],
         }, context)
         body = pynliner.fromString(body)
-
-        # on site notices aren't used anymore
-        # on_site = should_send(user, notice_type, "2", obj_instance) #On-site display
+        on_site = should_send(user, notice_type, "2", obj_instance) #On-site display
+        notice = Notice.objects.create(recipient=user, message=messages['notice.html'],
+            notice_type=notice_type, on_site=on_site, sender=sender)
         if (should_send(user, notice_type, "1", obj_instance) or force_send) and user.email and user.is_active: # Email
-            notice = Notice.objects.create(recipient=user, message=body, notice_type=notice_type)
             recipients.append(user.email)
             # send empty "plain text" data
             msg = EmailMultiAlternatives(subject, "", settings.DEFAULT_FROM_EMAIL, recipients)
@@ -376,7 +377,7 @@ def send_now(users, label, extra_context=None, on_site=True, sender=None, attach
                 msg.attach(attachment)
             try:
                 msg.send()
-                notice.archive()
+                email_sent.send(sender=Notice, user=user, notice_type=notice_type, obj=obj_instance)
                 notifications_logger.info("SUCCESS:EMAIL:%s: data=(notice_type=%s, subject=%s)"%(user, notice_type, subject))
             except:
                 notifications_logger.exception("ERROR:EMAIL:%s: data=(notice_type=%s, subject=%s)"%(user, notice_type, subject))
@@ -386,6 +387,7 @@ def send_now(users, label, extra_context=None, on_site=True, sender=None, attach
                 rc.sms.messages.create(to=user.userprofile.sms,
                                        from_=TWILIO_CALLER_ID,
                                        body=messages['sms.txt'])
+                sms_sent.send(sender=Notice, user=user, notice_type=notice_type, obj=obj_instance)
                 notifications_logger.info("SUCCESS:SMS:%s: data=(notice_type=%s, msg=%s)"%(user, notice_type, messages['sms.txt']))
             except:
                 notifications_logger.exception("ERROR:SMS:%s: data=(notice_type=%s, msg=%s)"%(user, notice_type, messages['sms.txt']))
