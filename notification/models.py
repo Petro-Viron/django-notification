@@ -6,6 +6,7 @@ try:
 except ImportError:
     import pickle
 
+from django.apps import apps
 from django.db import models
 from django.db.models.query import QuerySet
 from django.conf import settings
@@ -22,7 +23,7 @@ from django.contrib.auth.models import User
 from django.contrib.auth.models import AnonymousUser
 
 from django.contrib.contenttypes.models import ContentType
-from django.contrib.contenttypes import generic
+from django.contrib.contenttypes.fields import GenericForeignKey
 
 from django.utils.translation import ugettext as _
 from django.utils.translation import ugettext, get_language, activate
@@ -263,7 +264,7 @@ def get_notification_language(user):
     if getattr(settings, 'NOTIFICATION_LANGUAGE_MODULE', False):
         try:
             app_label, model_name = settings.NOTIFICATION_LANGUAGE_MODULE.split('.')
-            model = models.get_model(app_label, model_name)
+            model = apps.get_model(app_label=app_label, model_name=model_name)
             language_model = model._default_manager.get(user__id__exact=user.id)
             if hasattr(language_model, 'language'):
                 return language_model.language
@@ -452,7 +453,7 @@ class ObservedItem(models.Model):
 
     content_type = models.ForeignKey(ContentType)
     object_id = models.PositiveIntegerField()
-    observed_object = generic.GenericForeignKey('content_type', 'object_id')
+    observed_object = GenericForeignKey('content_type', 'object_id')
 
     notice_type = models.ForeignKey(NoticeType, verbose_name=_('notice type'))
 
