@@ -2,7 +2,7 @@ from django.utils import timezone
 import pynliner
 
 try:
-    import cPickle as pickle
+    import pickle as pickle
 except ImportError:
     import pickle
 
@@ -127,7 +127,7 @@ def should_send(user, notice_type, medium, obj_instance=None):
         has_custom_settings =  custom_permission_check('custom_notification_settings', obj_instance, user)
         if has_custom_settings:
             medium_text = notice_medium_as_text(medium)
-            perm_string = u"%s-%s"%(medium_text,notice_type.label)
+            perm_string = "%s-%s"%(medium_text,notice_type.label)
             return custom_permission_check(perm_string, obj_instance, user)
     return get_notification_setting(user, notice_type, medium).send
 
@@ -249,11 +249,11 @@ def create_notice_type(label, display, description, default=2, verbosity=1):
         if updated:
             notice_type.save()
             if verbosity > 1:
-                print "Updated %s NoticeType" % label
+                print("Updated %s NoticeType" % label)
     except NoticeType.DoesNotExist:
         NoticeType(label=label, display=display, description=description, default=default).save()
         if verbosity > 1:
-            print "Created %s NoticeType" % label
+            print("Created %s NoticeType" % label)
 
 def get_notification_language(user):
     """
@@ -312,9 +312,9 @@ def send_now(users, label, extra_context=None, on_site=True, sender=None, attach
     protocol = getattr(settings, "DEFAULT_HTTP_PROTOCOL", "http")
     current_site = Site.objects.get_current()
 
-    notices_url = u"%s://%s%s" % (
+    notices_url = "%s://%s%s" % (
         protocol,
-        unicode(current_site),
+        str(current_site),
         reverse("notification_notices"),
     )
 
