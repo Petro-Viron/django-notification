@@ -288,7 +288,7 @@ def get_formatted_messages(formats, label, context):
             context.autoescape = True
         format_templates[format] = render_to_string((
             'notification/%s/%s' % (label, format),
-            'notification/%s' % format), context_instance=context)
+            'notification/%s' % format), context=context)
     return format_templates
 
 def send_now(users, label, extra_context=None, on_site=True, sender=None, attachments=[],\
@@ -355,15 +355,13 @@ def send_now(users, label, extra_context=None, on_site=True, sender=None, attach
 
         # get prerendered format messages
         messages = get_formatted_messages(formats, label, context)
+        context['message'] = messages['short.txt']
 
         # Strip newlines from subject
-        subject = ''.join(render_to_string('notification/email_subject.txt', {
-            'message': messages['short.txt'],
-        }, context).splitlines())
+        subject = ''.join(render_to_string('notification/email_subject.txt', context).splitlines())
 
-        body = render_to_string('notification/email_body.txt', {
-            'message': messages['full.txt'],
-        }, context)
+        context['message'] = messages['full.txt']
+        body = render_to_string('notification/email_body.txt', context)
         body = pynliner.fromString(body)
         on_site = should_send(user, notice_type, "2", obj_instance) #On-site display
         notice = Notice.objects.create(recipient=user, message=messages['notice.html'],

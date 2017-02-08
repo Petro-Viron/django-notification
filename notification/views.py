@@ -1,7 +1,6 @@
 from django.core.urlresolvers import reverse
-from django.shortcuts import render_to_response, get_object_or_404
+from django.shortcuts import render, get_object_or_404
 from django.http import HttpResponseRedirect, Http404
-from django.template import RequestContext
 from django.contrib.auth.decorators import login_required
 from django.contrib.syndication.views import Feed
 
@@ -25,34 +24,32 @@ def feed_for_user(request):
 def notices(request):
     """
     The main notices index view.
-    
+
     Template: :template:`notification/notices.html`
-    
+
     Context:
-    
+
         notices
             A list of :model:`notification.Notice` objects that are not archived
             and to be displayed on the site.
     """
     notices = Notice.objects.notices_for(request.user, on_site=True)
-    
-    return render_to_response("notification/notices.html", {
-        "notices": notices,
-    }, context_instance=RequestContext(request))
+
+    return render(request, "notification/notices.html", {"notices": notices})
 
 
 @login_required
 def notice_settings(request):
     """
     The notice settings view.
-    
+
     Template: :template:`notification/notice_settings.html`
-    
+
     Context:
-        
+
         notice_types
             A list of all :model:`notification.NoticeType` objects.
-        
+
         notice_settings
             A dictionary containing ``column_headers`` for each ``NOTICE_MEDIA``
             and ``rows`` containing a list of dictionaries: ``notice_type``, a
@@ -79,32 +76,32 @@ def notice_settings(request):
                         setting.save()
             settings_row.append((form_label, setting.send))
         settings_table.append({"notice_type": notice_type, "cells": settings_row})
-    
+
     notice_settings = {
         "column_headers": [medium_display for medium_id, medium_display in NOTICE_MEDIA],
         "rows": settings_table,
     }
-    
-    return render_to_response("notification/notice_settings.html", {
+
+    return render(request, "notification/notice_settings.html", {
         "notice_types": notice_types,
         "notice_settings": notice_settings,
-    }, context_instance=RequestContext(request))
+    })
 
 
 @login_required
 def single(request, id, mark_seen=True):
     """
     Detail view for a single :model:`notification.Notice`.
-    
+
     Template: :template:`notification/single.html`
-    
+
     Context:
-    
+
         notice
             The :model:`notification.Notice` being viewed
-    
+
     Optional arguments:
-    
+
         mark_seen
             If ``True``, mark the notice as seen if it isn't
             already.  Do nothing if ``False``.  Default: ``True``.
@@ -114,9 +111,9 @@ def single(request, id, mark_seen=True):
         if mark_seen and notice.unseen:
             notice.unseen = False
             notice.save()
-        return render_to_response("notification/single.html", {
+        return render(request, "notification/single.html", {
             "notice": notice,
-        }, context_instance=RequestContext(request))
+        })
     raise Http404
 
 
@@ -126,12 +123,12 @@ def archive(request, noticeid=None, next_page=None):
     Archive a :model:`notices.Notice` if the requesting user is the
     recipient or if the user is a superuser.  Returns a
     ``HttpResponseRedirect`` when complete.
-    
+
     Optional arguments:
-    
+
         noticeid
             The ID of the :model:`notices.Notice` to be archived.
-        
+
         next_page
             The page to redirect to when done.
     """
@@ -154,12 +151,12 @@ def delete(request, noticeid=None, next_page=None):
     Delete a :model:`notices.Notice` if the requesting user is the recipient
     or if the user is a superuser.  Returns a ``HttpResponseRedirect`` when
     complete.
-    
+
     Optional arguments:
-    
+
         noticeid
             The ID of the :model:`notices.Notice` to be archived.
-        
+
         next_page
             The page to redirect to when done.
     """
@@ -180,9 +177,9 @@ def delete(request, noticeid=None, next_page=None):
 def mark_all_seen(request):
     """
     Mark all unseen notices for the requesting user as seen.  Returns a
-    ``HttpResponseRedirect`` when complete. 
+    ``HttpResponseRedirect`` when complete.
     """
-    
+
     for notice in Notice.objects.notices_for(request.user, unseen=True):
         notice.unseen = False
         notice.save()
