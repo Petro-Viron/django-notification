@@ -65,7 +65,7 @@ class NoticeType(models.Model):
     # by default only on for media with sensitivity less than or equal to this number
     default = models.IntegerField(_('default'))
 
-    def __unicode__(self):
+    def __str__(self):
         return self.label
 
     class Meta:
@@ -194,7 +194,7 @@ class Notice(models.Model):
 
     objects = NoticeManager()
 
-    def __unicode__(self):
+    def __str__(self):
         return self.message
 
     def archive(self):
