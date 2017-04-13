@@ -16,7 +16,7 @@ from django.conf import settings
 from django.core.mail import EmailMultiAlternatives
 from django.core import mail
 from django.core.urlresolvers import reverse
-from django.template import Context
+from django.template import Context, engines
 from django.template.loader import render_to_string
 
 from django.core.exceptions import ImproperlyConfigured
@@ -282,14 +282,17 @@ def get_formatted_messages(formats, label, context):
     """
     format_templates = {}
     for format in formats:
+
         # conditionally turn off autoescaping for .txt extensions in format
-        if format.endswith(".txt"):
-            context.autoescape = False
+        engine_names = [e.name for e in engines.all()]
+        if format.endswith(".txt") and "notification.txt" in engine_names:
+            engine = 'notification.txt'
         else:
-            context.autoescape = True
+            engine = None
+
         format_templates[format] = render_to_string((
             'notification/%s/%s' % (label, format),
-            'notification/%s' % format), context=context)
+            'notification/%s' % format), context=context, using=engine)
     return format_templates
 
 def send_now(users, label, extra_context=None, on_site=True, sender=None, attachments=[],\
