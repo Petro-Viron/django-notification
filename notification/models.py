@@ -15,7 +15,6 @@ from django.db.models.query import QuerySet
 from django.conf import settings
 from django.core.mail import EmailMultiAlternatives
 from django.core import mail
-from django.core.urlresolvers import reverse
 from django.template import Context, engines
 from django.template.loader import render_to_string
 
@@ -318,12 +317,6 @@ def send_now(users, label, extra_context=None, on_site=True, sender=None, attach
     protocol = getattr(settings, "DEFAULT_HTTP_PROTOCOL", "http")
     current_site = Site.objects.get_current()
 
-    notices_url = u"%s://%s%s" % (
-        protocol,
-        unicode(current_site),
-        reverse("notification_notices"),
-    )
-
     current_language = get_language()
 
     formats = (
@@ -352,7 +345,7 @@ def send_now(users, label, extra_context=None, on_site=True, sender=None, attach
             "recipient": user,
             "sender": sender,
             "notice": ugettext(notice_type.display),
-            "notices_url": notices_url,
+            "notices_url": "",
             "current_site": current_site,
         })
         context.update(extra_context)
