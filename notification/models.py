@@ -15,7 +15,7 @@ from django.db.models.query import QuerySet
 from django.conf import settings
 from django.core.mail import EmailMultiAlternatives
 from django.core import mail
-from django.template import Context, engines
+from django.template import engines
 from django.template.loader import render_to_string
 
 from django.core.exceptions import ImproperlyConfigured
@@ -341,13 +341,13 @@ def send_now(users, label, extra_context=None, on_site=True, sender=None, attach
             activate(language)
 
         # update context with user specific translations
-        context = Context({
+        context = {
             "recipient": user,
             "sender": sender,
             "notice": ugettext(notice_type.display),
             "notices_url": "",
             "current_site": current_site,
-        })
+        }
         context.update(extra_context)
 
         # get prerendered format messages
