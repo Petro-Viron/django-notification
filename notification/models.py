@@ -266,6 +266,10 @@ def get_notification_language(user):
     if getattr(settings, 'NOTIFICATION_LANGUAGE_MODULE', False):
         try:
             app_label, model_name = settings.NOTIFICATION_LANGUAGE_MODULE.split('.')
+            try:
+                return getattr(user, model_name.lower()).language
+            except AttribueError:
+                pass
             model = apps.get_model(app_label=app_label, model_name=model_name)
             language_model = model._default_manager.get(user__id__exact=user.id)
             if hasattr(language_model, 'language'):
@@ -313,7 +317,6 @@ def send_now(users, label, extra_context=None, on_site=True, sender=None, attach
         extra_context = {}
 
     notice_type = NoticeType.objects.get(label=label)
-
     protocol = getattr(settings, "DEFAULT_HTTP_PROTOCOL", "http")
     current_site = Site.objects.get_current()
 
@@ -327,7 +330,16 @@ def send_now(users, label, extra_context=None, on_site=True, sender=None, attach
         'sms.txt',
     ) # TODO make formats configurable
 
+    from django.db import connection
+
     for user in users:
+
+        should_send_email = user.is_active and (user.email and force_send or should_send(user, notice_type, "1", obj_instance))
+        should_send_sms = user.userprofile.sms and user.is_active and should_send(user, notice_type, "3", obj_instance)
+
+        if not (should_send_email or should_send_sms):
+            continue
+
         recipients = []
         # get user language for user from language store defined in
         # NOTIFICATION_LANGUAGE_MODULE setting
@@ -360,10 +372,13 @@ def send_now(users, label, extra_context=None, on_site=True, sender=None, attach
         context['message'] = messages['full.txt']
         body = render_to_string('notification/email_body.txt', context)
         body = pynliner.fromString(body)
-        on_site = should_send(user, notice_type, "2", obj_instance) #On-site display
-        notice = Notice.objects.create(recipient=user, message=messages['notice.html'],
-            notice_type=notice_type, on_site=on_site, sender=sender)
-        if (should_send(user, notice_type, "1", obj_instance) or force_send) and user.email and user.is_active: # Email
+
+        # disabled Notice object creation since we are not using it
+        # on_site = should_send(user, notice_type, "2", obj_instance) #On-site display
+        # notice = Notice.objects.create(recipient=user, message=messages['notice.html'],
+        #     notice_type=notice_type, on_site=on_site, sender=sender)
+
+        if should_send_email: # Email
             recipients.append(user.email)
             # send empty "plain text" data
             msg = EmailMultiAlternatives(subject, "", settings.DEFAULT_FROM_EMAIL, recipients)
@@ -377,7 +392,8 @@ def send_now(users, label, extra_context=None, on_site=True, sender=None, attach
                 notifications_logger.info("SUCCESS:EMAIL:%s: data=(notice_type=%s, subject=%s)"%(user, notice_type, subject))
             except:
                 notifications_logger.exception("ERROR:EMAIL:%s: data=(notice_type=%s, subject=%s)"%(user, notice_type, subject))
-        if should_send(user, notice_type, "3", obj_instance) and user.userprofile.sms and user.is_active:
+
+        if should_send_sms:
             try:
                 rc = TwilioRestClient(TWILIO_ACCOUNT_SID, TWILIO_ACCOUNT_TOKEN)
                 rc.sms.messages.create(to=user.userprofile.sms,
