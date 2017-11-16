@@ -336,8 +336,11 @@ def send_now(users, label, extra_context=None, on_site=True, sender=None, attach
 
         should_send_email = user.is_active and (user.email and force_send or should_send(user, notice_type, "1", obj_instance))
         should_send_sms = user.userprofile.sms and user.is_active and should_send(user, notice_type, "3", obj_instance)
+        # disabled check for on_site for now since we are not using it
+        # on_site = should_send(user, notice_type, "2", obj_instance) #On-site display
+        on_site = False
 
-        if not (should_send_email or should_send_sms):
+        if not (should_send_email or should_send_sms or on_site):
             continue
 
         recipients = []
@@ -373,10 +376,8 @@ def send_now(users, label, extra_context=None, on_site=True, sender=None, attach
         body = render_to_string('notification/email_body.txt', context)
         body = pynliner.fromString(body)
 
-        # disabled Notice object creation since we are not using it
-        # on_site = should_send(user, notice_type, "2", obj_instance) #On-site display
-        # notice = Notice.objects.create(recipient=user, message=messages['notice.html'],
-        #     notice_type=notice_type, on_site=on_site, sender=sender)
+        notice = Notice.objects.create(recipient=user, message=messages['notice.html'],
+            notice_type=notice_type, on_site=on_site, sender=sender)
 
         if should_send_email: # Email
             recipients.append(user.email)
