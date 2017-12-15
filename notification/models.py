@@ -1,6 +1,26 @@
 from __future__ import print_function
+
+import logging
+
+from django.apps import apps
+from django.conf import settings
+from django.contrib.auth.models import AnonymousUser, User
+from django.contrib.contenttypes.fields import GenericForeignKey
+from django.contrib.contenttypes.models import ContentType
+from django.contrib.sites.models import Site
+from django.core import mail
+from django.core.exceptions import ImproperlyConfigured
+from django.core.mail import EmailMultiAlternatives
+from django.db import IntegrityError, models
+from django.db.models.query import QuerySet
+from django.template import Context, engines
+from django.template.loader import render_to_string
 from django.utils import timezone
+from django.utils.translation import activate, get_language
+from django.utils.translation import ugettext as _
+from postmark import PMMail
 import pynliner
+from twilio.rest import TwilioRestClient
 
 from .signals import email_sent, sms_sent
 
@@ -9,30 +29,11 @@ try:
 except ImportError:
     import pickle
 
-from django.apps import apps
-from django.db import models
-from django.db.models.query import QuerySet
-from django.conf import settings
-from django.core.mail import EmailMultiAlternatives
-from django.core import mail
-from django.template import Context, engines
-from django.template.loader import render_to_string
 
-from django.core.exceptions import ImproperlyConfigured
 
-from django.contrib.sites.models import Site
-from django.contrib.auth.models import User
-from django.contrib.auth.models import AnonymousUser
 
-from django.contrib.contenttypes.models import ContentType
-from django.contrib.contenttypes.fields import GenericForeignKey
 
-from django.utils.translation import ugettext as _
-from django.utils.translation import ugettext, get_language, activate
 
-from postmark import PMMail
-from twilio.rest import TwilioRestClient
-import logging
 
 notifications_logger = logging.getLogger("pivot.notifications")
 
@@ -111,8 +112,13 @@ def get_notification_setting(user, notice_type, medium):
         return NoticeSetting.objects.get(user=user, notice_type=notice_type, medium=medium)
     except NoticeSetting.DoesNotExist:
         default = (NOTICE_MEDIA_DEFAULTS[medium] <= notice_type.default)
-        setting = NoticeSetting(user=user, notice_type=notice_type, medium=medium, send=default)
-        setting.save()
+        try:
+            setting = NoticeSetting(user=user, notice_type=notice_type, medium=medium, send=default)
+            setting.save()
+        except IntegrityError:
+            # We are occassionally getting IntegrityErrors here (possible race condition?)
+            # so try getting again
+            setting = NoticeSetting.objects.get(user=user, notice_type=notice_type, medium=medium)
         return setting
 
 def get_all_notification_settings(user):
