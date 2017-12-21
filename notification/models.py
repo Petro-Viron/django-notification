@@ -274,7 +274,7 @@ def get_notification_language(user):
             app_label, model_name = settings.NOTIFICATION_LANGUAGE_MODULE.split('.')
             try:
                 return getattr(user, model_name.lower()).language
-            except AttribueError:
+            except AttributeError:
                 pass
             model = apps.get_model(app_label=app_label, model_name=model_name)
             language_model = model._default_manager.get(user__id__exact=user.id)
@@ -365,7 +365,7 @@ def send_now(users, label, extra_context=None, on_site=True, sender=None, attach
         context = Context({
             "recipient": user,
             "sender": sender,
-            "notice": ugettext(notice_type.display),
+            "notice": _(notice_type.display),
             "notices_url": "",
             "current_site": current_site,
         })
