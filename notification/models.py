@@ -2,37 +2,30 @@ from __future__ import print_function
 
 import logging
 
+import pynliner
 from django.apps import apps
 from django.conf import settings
 from django.contrib.auth.models import AnonymousUser, User
 from django.contrib.contenttypes.fields import GenericForeignKey
 from django.contrib.contenttypes.models import ContentType
 from django.contrib.sites.models import Site
-from django.core import mail
 from django.core.exceptions import ImproperlyConfigured
 from django.core.mail import EmailMultiAlternatives
 from django.db import IntegrityError, models
 from django.db.models.query import QuerySet
-from django.template import Context, engines
+from django.template import engines
 from django.template.loader import render_to_string
 from django.utils import timezone
-from django.utils.translation import activate, get_language
 from django.utils.translation import ugettext as _
-from postmark import PMMail
-import pynliner
+from django.utils.translation import activate, get_language
 from twilio.rest import TwilioRestClient
 
 from .signals import email_sent, sms_sent
 
 try:
-    import cPickle as pickle
+    import pickle as pickle
 except ImportError:
     import pickle
-
-
-
-
-
 
 
 notifications_logger = logging.getLogger("pivot.notifications")
@@ -66,7 +59,7 @@ class NoticeType(models.Model):
     # by default only on for media with sensitivity less than or equal to this number
     default = models.IntegerField(_('default'))
 
-    def __unicode__(self):
+    def __str__(self):
         return self.label
 
     class Meta:
@@ -135,7 +128,7 @@ def should_send(user, notice_type, medium, obj_instance=None):
         has_custom_settings =  custom_permission_check('custom_notification_settings', obj_instance, user)
         if has_custom_settings:
             medium_text = notice_medium_as_text(medium)
-            perm_string = u"%s-%s"%(medium_text,notice_type.label)
+            perm_string = "%s-%s"%(medium_text,notice_type.label)
             return custom_permission_check(perm_string, obj_instance, user)
     return get_notification_setting(user, notice_type, medium).send
 
@@ -200,7 +193,7 @@ class Notice(models.Model):
 
     objects = NoticeManager()
 
-    def __unicode__(self):
+    def __str__(self):
         return self.message
 
     def archive(self):
@@ -362,13 +355,13 @@ def send_now(users, label, extra_context=None, on_site=True, sender=None, attach
             activate(language)
 
         # update context with user specific translations
-        context = Context({
+        context = {
             "recipient": user,
             "sender": sender,
             "notice": _(notice_type.display),
             "notices_url": "",
             "current_site": current_site,
-        })
+        }
         context.update(extra_context)
 
         # get prerendered format messages
