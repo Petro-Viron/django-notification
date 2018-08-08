@@ -2,6 +2,7 @@ from __future__ import print_function
 
 import logging
 
+import pynliner
 from django.apps import apps
 from django.conf import settings
 from django.contrib.auth.models import AnonymousUser, User
@@ -19,7 +20,6 @@ from django.utils import timezone
 from django.utils.translation import activate, get_language
 from django.utils.translation import ugettext as _
 from postmark import PMMail
-import pynliner
 from twilio.rest import TwilioRestClient
 
 from .signals import email_sent, sms_sent
@@ -360,7 +360,7 @@ def send_now(users, label, extra_context=None, on_site=True, sender=None, attach
         context = {
             "recipient": user,
             "sender": sender,
-            "notice": ugettext(notice_type.display),
+            "notice": _(notice_type.display),
             "notices_url": "",
             "current_site": current_site,
         }
