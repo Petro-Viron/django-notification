@@ -1,9 +1,9 @@
 # -*- coding: utf-8 -*-
 
 
+from django.conf import settings
 from django.db import migrations, models
 import django.utils.timezone
-from django.conf import settings
 
 
 class Migration(migrations.Migration):
@@ -41,7 +41,14 @@ class Migration(migrations.Migration):
             name='NoticeSetting',
             fields=[
                 ('id', models.AutoField(verbose_name='ID', serialize=False, auto_created=True, primary_key=True)),
-                ('medium', models.CharField(max_length=1, verbose_name='medium', choices=[(b'1', 'Email'), (b'2', 'Display'), (b'3', 'SMS')])),
+                (
+                    'medium',
+                    models.CharField(
+                        max_length=1,
+                        verbose_name='medium',
+                        choices=[(b'1', 'Email'), (b'2', 'Display'), (b'3', 'SMS')]
+                    )
+                ),
                 ('send', models.BooleanField(default=False, verbose_name='send')),
             ],
             options={
@@ -70,9 +77,14 @@ class Migration(migrations.Migration):
                 ('object_id', models.PositiveIntegerField()),
                 ('added', models.DateTimeField(default=django.utils.timezone.now, verbose_name='added')),
                 ('signal', models.TextField(verbose_name='signal')),
-                ('content_type', models.ForeignKey(to='contenttypes.ContentType')),
-                ('notice_type', models.ForeignKey(verbose_name='notice type', to='notification.NoticeType')),
-                ('user', models.ForeignKey(verbose_name='user', to=settings.AUTH_USER_MODEL)),
+                ('content_type', models.ForeignKey(to='contenttypes.ContentType', on_delete=models.CASCADE)),
+                (
+                    'notice_type',
+                    models.ForeignKey(
+                        verbose_name='notice type', to='notification.NoticeType', on_delete=models.CASCADE
+                    )
+                ),
+                ('user', models.ForeignKey(verbose_name='user', to=settings.AUTH_USER_MODEL, on_delete=models.CASCADE)),
             ],
             options={
                 'ordering': ['-added'],
@@ -83,27 +95,38 @@ class Migration(migrations.Migration):
         migrations.AddField(
             model_name='noticesetting',
             name='notice_type',
-            field=models.ForeignKey(verbose_name='notice type', to='notification.NoticeType'),
+            field=models.ForeignKey(verbose_name='notice type', to='notification.NoticeType', on_delete=models.CASCADE),
         ),
         migrations.AddField(
             model_name='noticesetting',
             name='user',
-            field=models.ForeignKey(verbose_name='user', to=settings.AUTH_USER_MODEL),
+            field=models.ForeignKey(verbose_name='user', to=settings.AUTH_USER_MODEL, on_delete=models.CASCADE),
         ),
         migrations.AddField(
             model_name='notice',
             name='notice_type',
-            field=models.ForeignKey(verbose_name='notice type', to='notification.NoticeType'),
+            field=models.ForeignKey(verbose_name='notice type', to='notification.NoticeType', on_delete=models.CASCADE),
         ),
         migrations.AddField(
             model_name='notice',
             name='recipient',
-            field=models.ForeignKey(related_name='recieved_notices', verbose_name='recipient', to=settings.AUTH_USER_MODEL),
+            field=models.ForeignKey(
+                related_name='recieved_notices',
+                verbose_name='recipient',
+                to=settings.AUTH_USER_MODEL,
+                on_delete=models.CASCADE
+            ),
         ),
         migrations.AddField(
             model_name='notice',
             name='sender',
-            field=models.ForeignKey(related_name='sent_notices', verbose_name='sender', to=settings.AUTH_USER_MODEL, null=True),
+            field=models.ForeignKey(
+                related_name='sent_notices',
+                verbose_name='sender',
+                to=settings.AUTH_USER_MODEL,
+                null=True,
+                on_delete=models.CASCADE
+            ),
         ),
         migrations.AlterUniqueTogether(
             name='noticesetting',

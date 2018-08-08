@@ -1,17 +1,15 @@
 from datetime import datetime
-from django.utils import timezone
 
-from django.core.urlresolvers import reverse
 from django.conf import settings
-from django.contrib.sites.models import Site
 from django.contrib.auth.models import User
+from django.contrib.sites.models import Site
 from django.shortcuts import get_object_or_404
-from django.template.defaultfilters import linebreaks, escape, striptags
+from django.template.defaultfilters import escape, linebreaks, striptags
+from django.urls import reverse
+from django.utils import timezone
 from django.utils.translation import ugettext_lazy as _
-
-from notification.models import Notice
 from notification.atomformat import Feed
-
+from notification.models import Notice
 
 ITEMS_PER_FEED = getattr(settings, 'ITEMS_PER_FEED', 20)
 DEFAULT_HTTP_PROTOCOL = getattr(settings, "DEFAULT_HTTP_PROTOCOL", "http")
@@ -24,22 +22,22 @@ class BaseNoticeFeed(Feed):
             Site.objects.get_current().domain,
             notification.get_absolute_url(),
         )
-    
+
     def item_title(self, notification):
         return striptags(notification.message)
-    
+
     def item_updated(self, notification):
         return notification.added
-    
+
     def item_published(self, notification):
         return notification.added
-    
+
     def item_content(self, notification):
         return {"type" : "html", }, linebreaks(escape(notification.message))
-    
+
     def item_links(self, notification):
         return [{"href" : self.item_id(notification)}]
-    
+
     def item_authors(self, notification):
         return [{"name" : notification.user.username}]
 

@@ -1,12 +1,14 @@
-from django.core.urlresolvers import reverse
-from django.shortcuts import render, get_object_or_404
-from django.http import HttpResponseRedirect, Http404
 from django.contrib.auth.decorators import login_required
 from django.contrib.syndication.views import Feed
-
-from notification.models import *
-from notification.decorators import basic_auth_required, simple_basic_auth_callback
+from django.http import Http404, HttpResponseRedirect
+from django.shortcuts import get_object_or_404, render
+from django.urls import reverse
+from notification.decorators import (
+    basic_auth_required,
+    simple_basic_auth_callback,
+)
 from notification.feeds import NoticeUserFeed
+from notification.models import *
 
 
 @basic_auth_required(realm='Notices Feed', callback_func=simple_basic_auth_callback)
@@ -138,7 +140,7 @@ def archive(request, noticeid=None, next_page=None):
             if request.user == notice.recipient or request.user.is_superuser:
                 notice.archive()
             else:   # you can archive other users' notices
-                    # only if you are superuser.
+                # only if you are superuser.
                 return HttpResponseRedirect(next_page)
         except Notice.DoesNotExist:
             return HttpResponseRedirect(next_page)
@@ -166,7 +168,7 @@ def delete(request, noticeid=None, next_page=None):
             if request.user == notice.recipient or request.user.is_superuser:
                 notice.delete()
             else:   # you can delete other users' notices
-                    # only if you are superuser.
+                # only if you are superuser.
                 return HttpResponseRedirect(next_page)
         except Notice.DoesNotExist:
             return HttpResponseRedirect(next_page)

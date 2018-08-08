@@ -1,6 +1,26 @@
 from __future__ import print_function
+
+import logging
+
+from django.apps import apps
+from django.conf import settings
+from django.contrib.auth.models import AnonymousUser, User
+from django.contrib.contenttypes.fields import GenericForeignKey
+from django.contrib.contenttypes.models import ContentType
+from django.contrib.sites.models import Site
+from django.core import mail
+from django.core.exceptions import ImproperlyConfigured
+from django.core.mail import EmailMultiAlternatives
+from django.db import models
+from django.db.models.query import QuerySet
+from django.template import engines
+from django.template.loader import render_to_string
 from django.utils import timezone
+from django.utils.translation import activate, get_language
+from django.utils.translation import ugettext as _
+from postmark import PMMail
 import pynliner
+from twilio.rest import TwilioRestClient
 
 from .signals import email_sent, sms_sent
 
@@ -9,30 +29,11 @@ try:
 except ImportError:
     import pickle
 
-from django.apps import apps
-from django.db import models
-from django.db.models.query import QuerySet
-from django.conf import settings
-from django.core.mail import EmailMultiAlternatives
-from django.core import mail
-from django.template import engines
-from django.template.loader import render_to_string
 
-from django.core.exceptions import ImproperlyConfigured
 
-from django.contrib.sites.models import Site
-from django.contrib.auth.models import User
-from django.contrib.auth.models import AnonymousUser
 
-from django.contrib.contenttypes.models import ContentType
-from django.contrib.contenttypes.fields import GenericForeignKey
 
-from django.utils.translation import ugettext as _
-from django.utils.translation import ugettext, get_language, activate
 
-from postmark import PMMail
-from twilio.rest import TwilioRestClient
-import logging
 
 notifications_logger = logging.getLogger("pivot.notifications")
 
@@ -96,8 +97,8 @@ class NoticeSetting(models.Model):
     of a given type to a given medium.
     """
 
-    user = models.ForeignKey(User, verbose_name=_('user'))
-    notice_type = models.ForeignKey(NoticeType, verbose_name=_('notice type'))
+    user = models.ForeignKey(User, verbose_name=_('user'), on_delete=models.CASCADE)
+    notice_type = models.ForeignKey(NoticeType, verbose_name=_('notice type'), on_delete=models.CASCADE)
     medium = models.CharField(_('medium'), max_length=1, choices=NOTICE_MEDIA)
     send = models.BooleanField(_('send'), default=False)
 
@@ -183,10 +184,10 @@ class NoticeManager(models.Manager):
 
 class Notice(models.Model):
 
-    recipient = models.ForeignKey(User, related_name='recieved_notices', verbose_name=_('recipient'))
-    sender = models.ForeignKey(User, null=True, related_name='sent_notices', verbose_name=_('sender'))
+    recipient = models.ForeignKey(User, on_delete=models.CASCADE, related_name='recieved_notices', verbose_name=_('recipient'))
+    sender = models.ForeignKey(User, on_delete=models.CASCADE, null=True, related_name='sent_notices', verbose_name=_('sender'))
     message = models.TextField(_('message'))
-    notice_type = models.ForeignKey(NoticeType, verbose_name=_('notice type'))
+    notice_type = models.ForeignKey(NoticeType, on_delete=models.CASCADE, verbose_name=_('notice type'))
     added = models.DateTimeField(_('added'), default=timezone.now, db_index=True)
     unseen = models.BooleanField(_('unseen'), default=True)
     archived = models.BooleanField(_('archived'), default=False)
@@ -465,13 +466,13 @@ class ObservedItemManager(models.Manager):
 
 class ObservedItem(models.Model):
 
-    user = models.ForeignKey(User, verbose_name=_('user'))
+    user = models.ForeignKey(User, on_delete=models.CASCADE, verbose_name=_('user'))
 
-    content_type = models.ForeignKey(ContentType)
+    content_type = models.ForeignKey(ContentType, on_delete=models.CASCADE)
     object_id = models.PositiveIntegerField()
     observed_object = GenericForeignKey('content_type', 'object_id')
 
-    notice_type = models.ForeignKey(NoticeType, verbose_name=_('notice type'))
+    notice_type = models.ForeignKey(NoticeType, on_delete=models.CASCADE, verbose_name=_('notice type'))
 
     added = models.DateTimeField(_('added'), default=timezone.now)
 
