@@ -18,7 +18,7 @@ from django.template.loader import render_to_string
 from django.utils import timezone
 from django.utils.translation import ugettext as _
 from django.utils.translation import activate, get_language
-from twilio.rest import TwilioRestClient
+from twilio.rest import Client as TwilioRestClient
 
 from .signals import email_sent, sms_sent
 
@@ -31,7 +31,6 @@ except ImportError:
 notifications_logger = logging.getLogger("pivot.notifications")
 
 QUEUE_ALL = getattr(settings, "NOTIFICATION_QUEUE_ALL", False)
-TWILIO_API_VERSION = getattr(settings, "TWILIO_API_VERSION", False)
 TWILIO_ACCOUNT_SID = getattr(settings, "TWILIO_ACCOUNT_SID", False)
 TWILIO_ACCOUNT_TOKEN = getattr(settings, "TWILIO_ACCOUNT_TOKEN", False)
 TWILIO_CALLER_ID = getattr(settings, "TWILIO_CALLER_ID", False)
@@ -396,9 +395,11 @@ def send_now(users, label, extra_context=None, on_site=True, sender=None, attach
         if should_send_sms:
             try:
                 rc = TwilioRestClient(TWILIO_ACCOUNT_SID, TWILIO_ACCOUNT_TOKEN)
-                rc.sms.messages.create(to=user.userprofile.sms,
-                                       from_=TWILIO_CALLER_ID,
-                                       body=messages['sms.txt'])
+                rc.api.v2010.messages.create(
+                    to=user.userprofile.sms,
+                    from_=TWILIO_CALLER_ID,
+                    body=messages['sms.txt'],
+                )
                 sms_sent.send(sender=Notice, user=user, notice_type=notice_type, obj=obj_instance)
                 notifications_logger.info("SUCCESS:SMS:%s: data=(notice_type=%s, msg=%s)"%(user, notice_type, messages['sms.txt']))
             except:
