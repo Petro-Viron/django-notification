@@ -39,9 +39,10 @@ if 'guardian' in settings.INSTALLED_APPS:
     enable_object_notifications = True
 
     def custom_permission_check(perm, obj, user):
+        db = user._state.db
         from guardian.models import UserObjectPermission
-        return UserObjectPermission.objects.filter(user=user, permission__codename=perm,
-                object_pk = obj.pk, content_type=ContentType.objects.get_for_model(obj)).exists()
+        return UserObjectPermission.objects.using(db).filter(user=user, permission__codename=perm,
+                object_pk = obj.pk, content_type=ContentType.objects.db_manager(db).get_for_model(obj)).exists()
 
 else:
     enable_object_notifications = False
@@ -100,26 +101,29 @@ class NoticeSetting(models.Model):
         unique_together = ("user", "notice_type", "medium")
 
 def get_notification_setting(user, notice_type, medium):
+    db = user._state.db
     try:
-        return NoticeSetting.objects.get(user=user, notice_type=notice_type, medium=medium)
+        return NoticeSetting.objects.using(db).get(user=user, notice_type=notice_type, medium=medium)
     except NoticeSetting.DoesNotExist:
         default = (NOTICE_MEDIA_DEFAULTS[medium] <= notice_type.default)
         try:
             setting = NoticeSetting(user=user, notice_type=notice_type, medium=medium, send=default)
-            setting.save()
+            setting.save(using=db)
         except IntegrityError:
             # We are occassionally getting IntegrityErrors here (possible race condition?)
             # so try getting again
-            setting = NoticeSetting.objects.get(user=user, notice_type=notice_type, medium=medium)
+            setting = NoticeSetting.objects.using(db).get(user=user, notice_type=notice_type, medium=medium)
         return setting
 
 def get_all_notification_settings(user):
-    return NoticeSetting.objects.filter(user=user)
+    db = user._state.db
+    return NoticeSetting.objects.using(db).filter(user=user)
 
 def create_notification_setting(user, notice_type, medium):
+    db = user._state.db
     default = (NOTICE_MEDIA_DEFAULTS[medium] <= notice_type.default)
     setting = NoticeSetting(user=user, notice_type=notice_type, medium=medium, send=default)
-    setting.save()
+    setting.save(using=db)
     return setting
 
 def should_send(user, notice_type, medium, obj_instance=None):
@@ -314,9 +318,11 @@ def send_now(users, label, extra_context=None, on_site=True, sender=None, attach
     if extra_context is None:
         extra_context = {}
 
-    notice_type = NoticeType.objects.get(label=label)
+    db = users[0]._state.db
+
+    notice_type = NoticeType.objects.using(db).get(label=label)
     protocol = getattr(settings, "DEFAULT_HTTP_PROTOCOL", "http")
-    current_site = Site.objects.get_current()
+    current_site = Site.objects.db_manager(db).get_current()
 
     current_language = get_language()
 
@@ -374,7 +380,7 @@ def send_now(users, label, extra_context=None, on_site=True, sender=None, attach
         body = render_to_string('notification/email_body.txt', context)
         body = pynliner.fromString(body)
 
-        notice = Notice.objects.create(recipient=user, message=messages['notice.html'],
+        notice = Notice.objects.using(db).create(recipient=user, message=messages['notice.html'],
             notice_type=notice_type, on_site=on_site, sender=sender)
 
         if should_send_email: # Email
