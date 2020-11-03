@@ -9,6 +9,7 @@ from django.contrib.auth.models import AnonymousUser, User
 from django.contrib.contenttypes.fields import GenericForeignKey
 from django.contrib.contenttypes.models import ContentType
 from django.contrib.sites.models import Site
+
 from django.core import mail
 from django.core.exceptions import ImproperlyConfigured
 from django.core.mail import EmailMultiAlternatives
@@ -23,6 +24,7 @@ from django.utils.translation import ugettext as _
 from postmark import PMMail
 from twilio.rest import TwilioRestClient
 
+
 from .signals import email_sent, sms_sent
 
 try:
@@ -30,10 +32,10 @@ try:
 except ImportError:
     import pickle
 
+
 notifications_logger = logging.getLogger("pivot.notifications")
 
 QUEUE_ALL = getattr(settings, "NOTIFICATION_QUEUE_ALL", False)
-TWILIO_API_VERSION = getattr(settings, "TWILIO_API_VERSION", False)
 TWILIO_ACCOUNT_SID = getattr(settings, "TWILIO_ACCOUNT_SID", False)
 TWILIO_ACCOUNT_TOKEN = getattr(settings, "TWILIO_ACCOUNT_TOKEN", False)
 TWILIO_CALLER_ID = getattr(settings, "TWILIO_CALLER_ID", False)
@@ -114,8 +116,13 @@ def get_notification_setting(user, notice_type, medium):
         return NoticeSetting.objects.get(user=user, notice_type=notice_type, medium=medium)
     except NoticeSetting.DoesNotExist:
         default = (NOTICE_MEDIA_DEFAULTS[medium] <= notice_type.default)
-        setting = NoticeSetting(user=user, notice_type=notice_type, medium=medium, send=default)
-        setting.save()
+        try:
+            setting = NoticeSetting(user=user, notice_type=notice_type, medium=medium, send=default)
+            setting.save()
+        except IntegrityError:
+            # We are occassionally getting IntegrityErrors here (possible race condition?)
+            # so try getting again
+            setting = NoticeSetting.objects.get(user=user, notice_type=notice_type, medium=medium)
         return setting
 
 
@@ -278,7 +285,7 @@ def get_notification_language(user):
             app_label, model_name = settings.NOTIFICATION_LANGUAGE_MODULE.split('.')
             try:
                 return getattr(user, model_name.lower()).language
-            except AttribueError:
+            except AttributeError:
                 pass
             model = apps.get_model(app_label=app_label, model_name=model_name)
             language_model = model._default_manager.get(user__id__exact=user.id)
@@ -412,9 +419,11 @@ def send_now(users, label, extra_context=None, on_site=True, sender=None, attach
         if should_send_sms:
             try:
                 rc = TwilioRestClient(TWILIO_ACCOUNT_SID, TWILIO_ACCOUNT_TOKEN)
-                rc.sms.messages.create(to=user.userprofile.sms,
-                                       from_=TWILIO_CALLER_ID,
-                                       body=messages['sms.txt'])
+                rc.api.v2010.messages.create(
+                    to=user.userprofile.sms,
+                    from_=TWILIO_CALLER_ID,
+                    body=messages['sms.txt'],
+                )
                 sms_sent.send(sender=Notice, user=user, notice_type=notice_type, obj=obj_instance)
                 notifications_logger.info(
                     "SUCCESS:SMS:%s: data=(notice_type=%s, msg=%s)" % (user, notice_type, messages['sms.txt']))
