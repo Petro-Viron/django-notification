@@ -9,16 +9,21 @@ from django.contrib.auth.models import AnonymousUser, User
 from django.contrib.contenttypes.fields import GenericForeignKey
 from django.contrib.contenttypes.models import ContentType
 from django.contrib.sites.models import Site
+
+from django.core import mail
 from django.core.exceptions import ImproperlyConfigured
 from django.core.mail import EmailMultiAlternatives
-from django.db import IntegrityError, models
+from django.db import models
 from django.db.models.query import QuerySet
 from django.template import engines
 from django.template.loader import render_to_string
+from django.urls import reverse
 from django.utils import timezone
-from django.utils.translation import ugettext as _
 from django.utils.translation import activate, get_language
-from twilio.rest import Client as TwilioRestClient
+from django.utils.translation import ugettext as _
+from postmark import PMMail
+from twilio.rest import TwilioRestClient
+
 
 from .signals import email_sent, sms_sent
 
@@ -38,19 +43,22 @@ TWILIO_CALLER_ID = getattr(settings, "TWILIO_CALLER_ID", False)
 if 'guardian' in settings.INSTALLED_APPS:
     enable_object_notifications = True
 
+
     def custom_permission_check(perm, obj, user):
         from guardian.models import UserObjectPermission
         return UserObjectPermission.objects.filter(user=user, permission__codename=perm,
-                object_pk = obj.pk, content_type=ContentType.objects.get_for_model(obj)).exists()
+                                                   object_pk=obj.pk,
+                                                   content_type=ContentType.objects.get_for_model(obj)).exists()
 
 else:
     enable_object_notifications = False
 
+
 class LanguageStoreNotAvailable(Exception):
     pass
 
-class NoticeType(models.Model):
 
+class NoticeType(models.Model):
     label = models.CharField(_('label'), max_length=40)
     display = models.CharField(_('display'), max_length=50)
     description = models.CharField(_('description'), max_length=100)
@@ -73,15 +81,18 @@ NOTICE_MEDIA = (
     ("3", _("SMS")),
 )
 
+
 def notice_medium_as_text(medium):
     return dict(NOTICE_MEDIA)[medium]
 
+
 # how spam-sensitive is the medium
 NOTICE_MEDIA_DEFAULTS = {
-    "1": 2, # email
+    "1": 2,  # email
     "2": 3,
     "3": 3,
 }
+
 
 class NoticeSetting(models.Model):
     """
@@ -89,8 +100,8 @@ class NoticeSetting(models.Model):
     of a given type to a given medium.
     """
 
-    user = models.ForeignKey(User, verbose_name=_('user'))
-    notice_type = models.ForeignKey(NoticeType, verbose_name=_('notice type'))
+    user = models.ForeignKey(User, verbose_name=_('user'), on_delete=models.CASCADE)
+    notice_type = models.ForeignKey(NoticeType, verbose_name=_('notice type'), on_delete=models.CASCADE)
     medium = models.CharField(_('medium'), max_length=1, choices=NOTICE_MEDIA)
     send = models.BooleanField(_('send'), default=False)
 
@@ -98,6 +109,7 @@ class NoticeSetting(models.Model):
         verbose_name = _("notice setting")
         verbose_name_plural = _("notice settings")
         unique_together = ("user", "notice_type", "medium")
+
 
 def get_notification_setting(user, notice_type, medium):
     try:
@@ -113,8 +125,10 @@ def get_notification_setting(user, notice_type, medium):
             setting = NoticeSetting.objects.get(user=user, notice_type=notice_type, medium=medium)
         return setting
 
+
 def get_all_notification_settings(user):
     return NoticeSetting.objects.filter(user=user)
+
 
 def create_notification_setting(user, notice_type, medium):
     default = (NOTICE_MEDIA_DEFAULTS[medium] <= notice_type.default)
@@ -122,12 +136,13 @@ def create_notification_setting(user, notice_type, medium):
     setting.save()
     return setting
 
+
 def should_send(user, notice_type, medium, obj_instance=None):
     if enable_object_notifications and obj_instance:
-        has_custom_settings =  custom_permission_check('custom_notification_settings', obj_instance, user)
+        has_custom_settings = custom_permission_check('custom_notification_settings', obj_instance, user)
         if has_custom_settings:
             medium_text = notice_medium_as_text(medium)
-            perm_string = "%s-%s"%(medium_text,notice_type.label)
+            perm_string = "%s-%s" % (medium_text, notice_type.label)
             return custom_permission_check(perm_string, obj_instance, user)
     return get_notification_setting(user, notice_type, medium).send
 
@@ -179,12 +194,14 @@ class NoticeManager(models.Manager):
         kwargs["sent"] = True
         return self.notices_for(sender, **kwargs)
 
-class Notice(models.Model):
 
-    recipient = models.ForeignKey(User, related_name='recieved_notices', verbose_name=_('recipient'))
-    sender = models.ForeignKey(User, null=True, related_name='sent_notices', verbose_name=_('sender'))
+class Notice(models.Model):
+    recipient = models.ForeignKey(User, on_delete=models.CASCADE, related_name='recieved_notices',
+                                  verbose_name=_('recipient'))
+    sender = models.ForeignKey(User, on_delete=models.CASCADE, null=True, related_name='sent_notices',
+                               verbose_name=_('sender'))
     message = models.TextField(_('message'))
-    notice_type = models.ForeignKey(NoticeType, verbose_name=_('notice type'))
+    notice_type = models.ForeignKey(NoticeType, on_delete=models.CASCADE, verbose_name=_('notice type'))
     added = models.DateTimeField(_('added'), default=timezone.now, db_index=True)
     unseen = models.BooleanField(_('unseen'), default=True)
     archived = models.BooleanField(_('archived'), default=False)
@@ -218,8 +235,8 @@ class Notice(models.Model):
         verbose_name_plural = _("notices")
 
     def get_absolute_url(self):
-        return ("notification_notice", [str(self.pk)])
-    get_absolute_url = models.permalink(get_absolute_url)
+        return reverse("notification_notice", args=[str(self.pk)])
+
 
 class NoticeQueueBatch(models.Model):
     """
@@ -227,6 +244,7 @@ class NoticeQueueBatch(models.Model):
     Denormalized data for a notice.
     """
     pickled_data = models.TextField()
+
 
 def create_notice_type(label, display, description, default=2, verbosity=1):
     """
@@ -255,6 +273,7 @@ def create_notice_type(label, display, description, default=2, verbosity=1):
         if verbosity > 1:
             print("Created %s NoticeType" % label)
 
+
 def get_notification_language(user):
     """
     Returns site-specific notification language for this user. Raises
@@ -276,6 +295,7 @@ def get_notification_language(user):
             raise LanguageStoreNotAvailable
     raise LanguageStoreNotAvailable
 
+
 def get_formatted_messages(formats, label, context):
     """
     Returns a dictionary with the format identifier as the key. The values are
@@ -296,8 +316,9 @@ def get_formatted_messages(formats, label, context):
             'notification/%s' % format), context=context, using=engine)
     return format_templates
 
-def send_now(users, label, extra_context=None, on_site=True, sender=None, attachments=[],\
-        obj_instance=None, force_send=False):
+
+def send_now(users, label, extra_context=None, on_site=True, sender=None, attachments=[], \
+             obj_instance=None, force_send=False):
     """
     Creates a new notice.
 
@@ -326,13 +347,14 @@ def send_now(users, label, extra_context=None, on_site=True, sender=None, attach
         'notice.html',
         'full.html',
         'sms.txt',
-    ) # TODO make formats configurable
+    )
 
     from django.db import connection
 
     for user in users:
 
-        should_send_email = user.is_active and (user.email and force_send or should_send(user, notice_type, "1", obj_instance))
+        should_send_email = user.is_active and (
+                    user.email and force_send or should_send(user, notice_type, "1", obj_instance))
         should_send_sms = user.userprofile.sms and user.is_active and should_send(user, notice_type, "3", obj_instance)
         # disabled check for on_site for now since we are not using it
         # on_site = should_send(user, notice_type, "2", obj_instance) #On-site display
@@ -375,9 +397,9 @@ def send_now(users, label, extra_context=None, on_site=True, sender=None, attach
         body = pynliner.fromString(body)
 
         notice = Notice.objects.create(recipient=user, message=messages['notice.html'],
-            notice_type=notice_type, on_site=on_site, sender=sender)
+                                       notice_type=notice_type, on_site=on_site, sender=sender)
 
-        if should_send_email: # Email
+        if should_send_email:  # Email
             recipients.append(user.email)
             # send empty "plain text" data
             msg = EmailMultiAlternatives(subject, "", settings.DEFAULT_FROM_EMAIL, recipients)
@@ -388,9 +410,11 @@ def send_now(users, label, extra_context=None, on_site=True, sender=None, attach
             try:
                 msg.send()
                 email_sent.send(sender=Notice, user=user, notice_type=notice_type, obj=obj_instance)
-                notifications_logger.info("SUCCESS:EMAIL:%s: data=(notice_type=%s, subject=%s)"%(user, notice_type, subject))
+                notifications_logger.info(
+                    "SUCCESS:EMAIL:%s: data=(notice_type=%s, subject=%s)" % (user, notice_type, subject))
             except:
-                notifications_logger.exception("ERROR:EMAIL:%s: data=(notice_type=%s, subject=%s)"%(user, notice_type, subject))
+                notifications_logger.exception(
+                    "ERROR:EMAIL:%s: data=(notice_type=%s, subject=%s)" % (user, notice_type, subject))
 
         if should_send_sms:
             try:
@@ -401,13 +425,15 @@ def send_now(users, label, extra_context=None, on_site=True, sender=None, attach
                     body=messages['sms.txt'],
                 )
                 sms_sent.send(sender=Notice, user=user, notice_type=notice_type, obj=obj_instance)
-                notifications_logger.info("SUCCESS:SMS:%s: data=(notice_type=%s, msg=%s)"%(user, notice_type, messages['sms.txt']))
+                notifications_logger.info(
+                    "SUCCESS:SMS:%s: data=(notice_type=%s, msg=%s)" % (user, notice_type, messages['sms.txt']))
             except:
-                notifications_logger.exception("ERROR:SMS:%s: data=(notice_type=%s, msg=%s)"%(user, notice_type, messages['sms.txt']))
-
+                notifications_logger.exception(
+                    "ERROR:SMS:%s: data=(notice_type=%s, msg=%s)" % (user, notice_type, messages['sms.txt']))
 
     # reset environment to original language
     activate(current_language)
+
 
 def send(*args, **kwargs):
     """
@@ -429,6 +455,7 @@ def send(*args, **kwargs):
         else:
             return send_now(*args, **kwargs)
 
+
 def queue(users, label, extra_context=None, on_site=True, sender=None):
     """
     Queue the notification in NoticeQueueBatch. This allows for large amounts
@@ -445,6 +472,7 @@ def queue(users, label, extra_context=None, on_site=True, sender=None):
     for user in users:
         notices.append((user, label, extra_context, on_site, sender))
     NoticeQueueBatch(pickled_data=pickle.dumps(notices).encode("base64")).save()
+
 
 class ObservedItemManager(models.Manager):
 
@@ -464,14 +492,13 @@ class ObservedItemManager(models.Manager):
 
 
 class ObservedItem(models.Model):
+    user = models.ForeignKey(User, on_delete=models.CASCADE, verbose_name=_('user'))
 
-    user = models.ForeignKey(User, verbose_name=_('user'))
-
-    content_type = models.ForeignKey(ContentType)
+    content_type = models.ForeignKey(ContentType, on_delete=models.CASCADE)
     object_id = models.PositiveIntegerField()
     observed_object = GenericForeignKey('content_type', 'object_id')
 
-    notice_type = models.ForeignKey(NoticeType, verbose_name=_('notice type'))
+    notice_type = models.ForeignKey(NoticeType, on_delete=models.CASCADE, verbose_name=_('notice type'))
 
     added = models.DateTimeField(_('added'), default=timezone.now)
 
@@ -491,6 +518,7 @@ class ObservedItem(models.Model):
         extra_context.update({'observed': self.observed_object})
         send([self.user], self.notice_type.label, extra_context)
 
+
 def observe(observed, observer, notice_type_label, signal='post_save'):
     """
     Create a new ObservedItem.
@@ -503,12 +531,14 @@ def observe(observed, observer, notice_type_label, signal='post_save'):
     observed_item.save()
     return observed_item
 
+
 def stop_observing(observed, observer, signal='post_save'):
     """
     Remove an observed item.
     """
     observed_item = ObservedItem.objects.get_for(observed, observer, signal)
     observed_item.delete()
+
 
 def send_observation_notices_for(observed, signal='post_save', extra_context=None):
     """
@@ -521,6 +551,7 @@ def send_observation_notices_for(observed, signal='post_save', extra_context=Non
         observed_item.send_notice(extra_context)
     return observed_items
 
+
 def is_observing(observed, observer, signal='post_save'):
     if isinstance(observer, AnonymousUser):
         return False
@@ -531,6 +562,7 @@ def is_observing(observed, observer, signal='post_save'):
         return False
     except ObservedItem.MultipleObjectsReturned:
         return True
+
 
 def handle_observations(sender, instance, *args, **kw):
     send_observation_notices_for(instance)
