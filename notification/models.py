@@ -22,7 +22,7 @@ from django.utils import timezone
 from django.utils.translation import activate, get_language
 from django.utils.translation import ugettext as _
 from postmark import PMMail
-from twilio.rest import TwilioRestClient
+from twilio.rest import Client as TwilioRestClient
 
 
 from .signals import email_sent, sms_sent
