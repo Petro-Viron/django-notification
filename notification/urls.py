@@ -1,4 +1,4 @@
-from django.conf.urls import url
+from django.urls import re_path as url
 
 from notification.views import notices, mark_all_seen, feed_for_user, single, notice_settings
 

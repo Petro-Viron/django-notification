@@ -20,7 +20,7 @@ from django.template.loader import render_to_string
 from django.urls import reverse
 from django.utils import timezone
 from django.utils.translation import activate, get_language
-from django.utils.translation import ugettext as _
+from django.utils.translation import gettext as _
 from postmark import PMMail
 from twilio.rest import Client as TwilioRestClient
 

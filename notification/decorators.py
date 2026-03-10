@@ -3,7 +3,7 @@ import collections
 from django.conf import settings
 from django.contrib.auth import authenticate, login
 from django.http import HttpResponse
-from django.utils.translation import ugettext as _
+from django.utils.translation import gettext as _
 
 
 def simple_basic_auth_callback(request, user, *args, **kwargs):

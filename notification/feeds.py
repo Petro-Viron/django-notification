@@ -7,7 +7,7 @@ from django.shortcuts import get_object_or_404
 from django.template.defaultfilters import escape, linebreaks, striptags
 from django.urls import reverse
 from django.utils import timezone
-from django.utils.translation import ugettext_lazy as _
+from django.utils.translation import gettext_lazy as _
 from notification.atomformat import Feed
 from notification.models import Notice
 
