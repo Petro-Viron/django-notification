@@ -13,7 +13,7 @@ from django.contrib.sites.models import Site
 from django.core import mail
 from django.core.exceptions import ImproperlyConfigured
 from django.core.mail import EmailMultiAlternatives
-from django.db import models
+from django.db import IntegrityError, models
 from django.db.models.query import QuerySet
 from django.template import engines
 from django.template.loader import render_to_string
